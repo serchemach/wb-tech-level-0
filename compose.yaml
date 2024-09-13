@@ -7,7 +7,6 @@ service:
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      EMAIL_ADDRESS: ${EMAIL_ADDRESS}
     volumes:
       - pgdata:/var/lib/postgresql/data 
     # ports:
@@ -17,7 +16,6 @@ service:
       interval: 2s
       timeout: 5s
       retries: 10
-    network_mode: host
 
 volumes:
   pgdata:
