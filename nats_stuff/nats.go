@@ -62,6 +62,11 @@ func (d *Time) UnmarshalJSON(b []byte) error {
 	return fmt.Errorf("invalid duration type %T, value: '%s'", b, b)
 }
 
+func (d Time) MarshalJSON() ([]byte, error) {
+	string := fmt.Sprintf("\"%s\"", time.Time(d).Format("2006-01-02T15:04:05-0700"))
+	return []byte(string), nil
+}
+
 type Order struct {
 	OrderUid          string   `json:"order_uid"`
 	TrackNumber       string   `json:"track_number"`
@@ -83,7 +88,6 @@ func getEnv(key, fallback string) string {
 	if value, ok := os.LookupEnv(key); ok {
 		return value
 	}
-	fmt.Printf("%s: %s\n", key, fallback)
 	return fallback
 }
 
@@ -93,14 +97,4 @@ func CreateConn() (stan.Conn, error) {
 	stanURL := getEnv("STAN_URL", "nats://localhost:4222")
 
 	return stan.Connect(clusterId, clientId, stan.NatsURL(stanURL))
-}
-
-func messageHandler(m *stan.Msg) {
-	fmt.Printf("Recieved a message: %v\n", m)
-}
-
-func CreateSubscription(sc stan.Conn) (stan.Subscription, error) {
-	channelName := getEnv("STAN_CHANNEL_NAME", "wb-channel")
-
-	return sc.Subscribe(channelName, messageHandler, stan.StartWithLastReceived(), stan.AckWait(20*time.Second))
 }
