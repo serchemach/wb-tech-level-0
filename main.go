@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	// "html"
 	"log"
@@ -88,6 +89,17 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		err = json.NewEncoder(w).Encode(order)
 		fmt.Printf("Error while encoding the json: %s", err)
+	})
+
+	http.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		// fmt.Fprintf(w, "Hello, %q", html.EscapeString(r.URL.Path))
+		htmlFile, err := os.ReadFile("pages/form.html")
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Println(err)
+		}
+
+		w.Write(htmlFile)
 	})
 
 	log.Fatal(http.ListenAndServe(":8080", nil))

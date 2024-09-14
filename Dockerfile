@@ -13,6 +13,7 @@ RUN go mod download
 # https://docs.docker.com/reference/dockerfile/#copy
 COPY *.go .env ./
 COPY nats_stuff/*.go nats_stuff/
+COPY pages/* pages/
 
 # Build
 RUN CGO_ENABLED=0 GOOS=linux go build -o /wb-tech-level-0
