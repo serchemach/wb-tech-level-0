@@ -11,7 +11,8 @@ RUN go mod download
 
 # Copy the source code. Note the slash at the end, as explained in
 # https://docs.docker.com/reference/dockerfile/#copy
-COPY *.go *.key* .env ./
+COPY *.go .env ./
+COPY nats_stuff/*.go nats_stuff/
 
 # Build
 RUN CGO_ENABLED=0 GOOS=linux go build -o /wb-tech-level-0
@@ -21,7 +22,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /wb-tech-level-0
 # But we can document in the Dockerfile what ports
 # the application is going to listen on by default.
 # https://docs.docker.com/reference/dockerfile/#expose
-EXPOSE $API_PORT
+EXPOSE 8080
 
 # Run
 CMD ["/wb-tech-level-0"]

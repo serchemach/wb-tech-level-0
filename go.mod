@@ -2,7 +2,10 @@ module github.com/serchemach/wb-tech-level-0
 
 go 1.22.5
 
-require github.com/nats-io/stan.go v0.10.4
+require (
+	github.com/joho/godotenv v1.5.1
+	github.com/nats-io/stan.go v0.10.4
+)
 
 require (
 	github.com/gogo/protobuf v1.3.2 // indirect
