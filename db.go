@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/dgraph-io/ristretto"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/serchemach/wb-tech-level-0/nats_stuff"
@@ -215,4 +216,25 @@ func fetchOrder(orderUid string, conn *pgxpool.Pool) (*nats_stuff.Order, error) 
 		DateCreated:       nats_stuff.Time(orderDb.DateCreated),
 		OofShard:          orderDb.OofShard,
 	}, nil
+}
+
+func initCache(cache *ristretto.Cache, conn *pgxpool.Pool) error {
+	queryString := fmt.Sprintf("SELECT order_uid FROM order_scheme.order ORDER BY date_created DESC LIMIT %d;", CACHE_SIZE)
+	rows, _ := conn.Query(context.Background(), queryString)
+	orderIds, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return err
+	}
+
+	for _, orderId := range orderIds {
+		cur_order, err := fetchOrder(orderId, conn)
+		if err != nil {
+			return err
+		}
+		ok := cache.Set(orderId, cur_order, 1)
+		fmt.Printf("TRIED SETTING CACHE FOR %s, RESULT %v\n", orderId, ok)
+		cache.Wait()
+	}
+
+	return nil
 }
