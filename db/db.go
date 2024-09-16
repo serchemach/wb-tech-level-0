@@ -87,8 +87,9 @@ func CreateDbConn() (*pgxpool.Pool, error) {
 	} else {
 		password = value
 	}
+	url := getEnv("POSTGRES_URL", "postgres:5432")
 
-	connString := fmt.Sprintf("postgres://%s:%s@postgres:5432/wb_tech", user, password)
+	connString := fmt.Sprintf("postgres://%s:%s@%s/wb_tech", user, password, url)
 
 	return pgxpool.New(context.Background(), connString)
 }

@@ -45,7 +45,7 @@ func ReadTopicIndefinitely(kafkaConn *kafka.Reader, dbConn *pgxpool.Pool, cache 
 	for {
 		m, err := kafkaConn.ReadMessage(context.Background())
 		if err != nil {
-			fmt.Printf("Error while reading the message: %s\n", err)
+			// fmt.Printf("Error while reading the message: %s\n", err)
 			continue
 		}
 		order, err := ParseMessage(m.Value)

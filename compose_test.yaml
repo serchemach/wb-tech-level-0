@@ -1,18 +1,11 @@
 services:
-  service:
-    build: .
-    ports: 
-      - "8080:8080"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-
   postgres:
+    hostname: postgres
     build:
       context: ./postgres
       dockerfile: Dockerfile    
+    ports:
+      - 5433:5432
     restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
