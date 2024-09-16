@@ -9,8 +9,6 @@ import (
 	"strconv"
 	"time"
 
-	// "time"
-
 	"github.com/dgraph-io/ristretto"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/segmentio/kafka-go"
@@ -35,7 +33,6 @@ func CreateConn() (*kafka.Reader, error) {
 
 	fmt.Println(kafkaURL)
 
-	// return kafka.DialLeader(context.Background(), "tcp", kafkaURL, kafkaTopic, kafkaPartition)
 	return kafka.NewReader(kafka.ReaderConfig{
 		Topic:     kafkaTopic,
 		Partition: kafkaPartition,
@@ -44,10 +41,6 @@ func CreateConn() (*kafka.Reader, error) {
 }
 
 func ReadTopicIndefinitely(kafkaConn *kafka.Reader, dbConn *pgxpool.Pool, cache *ristretto.Cache) {
-	// kafkaConn.SetReadDeadline(time.Now().Add(10 * time.Second))
-	// batch := kafkaConn.ReadBatch(10e3, 1e6) // fetch 10KB min, 1MB max
-
-	// buffer := make([]byte, 10e3) // 10KB max per message
 
 	for {
 		m, err := kafkaConn.ReadMessage(context.Background())

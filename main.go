@@ -1,25 +1,52 @@
 package main
 
 import (
-	// "bytes"
 	"encoding/json"
 	"fmt"
 	"os"
 
-	// "html"
 	"log"
 	"net/http"
-	// "time"
 
 	"github.com/dgraph-io/ristretto"
-	// "github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/joho/godotenv"
-	// "github.com/nats-io/stan.go"
 	"github.com/serchemach/wb-tech-level-0/db"
 	"github.com/serchemach/wb-tech-level-0/kafka"
 )
 
 const CACHE_SIZE int = 1024
+
+func OrderHandler(w http.ResponseWriter, r *http.Request, cache *ristretto.Cache, dbConn *pgxpool.Pool) {
+	orderUid := r.URL.Query().Get("order_uid")
+	if orderUid == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("No order id given"))
+		return
+	}
+
+	order, err := db.FetchOrderWithCache(orderUid, cache, dbConn)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(fmt.Sprintf("Error while fetching the order data: %s", err)))
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(order)
+	fmt.Printf("Error while encoding the json: %s\n", err)
+}
+
+func InterfaceHandler(w http.ResponseWriter, r *http.Request) {
+	htmlFile, err := os.ReadFile("pages/form.html")
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Println(err)
+	}
+
+	w.Write(htmlFile)
+}
 
 func main() {
 	err := godotenv.Load()
@@ -58,35 +85,8 @@ func main() {
 	go kafka.ReadTopicIndefinitely(kc, dbConn, cache)
 	fmt.Println("Successfully subscribed to the kafka topic")
 
-	http.HandleFunc("GET /order", func(w http.ResponseWriter, r *http.Request) {
-		orderUid := r.URL.Query().Get("order_uid")
-		if orderUid == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("No order id given"))
-			return
-		}
-
-		order, err := db.FetchOrderWithCache(orderUid, cache, dbConn)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(fmt.Sprintf("Error while fetching the order data: %s", err)))
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		err = json.NewEncoder(w).Encode(order)
-		fmt.Printf("Error while encoding the json: %s\n", err)
-	})
-
-	http.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-		htmlFile, err := os.ReadFile("pages/form.html")
-		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			fmt.Println(err)
-		}
-
-		w.Write(htmlFile)
-	})
+	http.HandleFunc("GET /order", func(w http.ResponseWriter, r *http.Request) { OrderHandler(w, r, cache, dbConn) })
+	http.HandleFunc("GET /", InterfaceHandler)
 
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
