@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
+
 	// "time"
 
 	"github.com/dgraph-io/ristretto"
@@ -77,4 +79,27 @@ func ParseMessage(m []byte) (*datamodel.Order, error) {
 	}
 
 	return &order, nil
+}
+
+func SendOrder(kafkaPartition int, kafkaTopic string, kafkaURL string, order *datamodel.Order) error {
+	kc, err := kafka.DialLeader(context.Background(), "tcp", kafkaURL, kafkaTopic, kafkaPartition)
+	if err != nil {
+		return err
+	}
+	defer kc.Close()
+
+	encodedOrder, err := json.Marshal(order)
+	if err != nil {
+		return err
+	}
+
+	kc.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	_, err = kc.WriteMessages(
+		kafka.Message{Value: encodedOrder},
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

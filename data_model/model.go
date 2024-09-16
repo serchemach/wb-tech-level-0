@@ -83,11 +83,15 @@ type Order struct {
 	OofShard          string   `json:"oof_shard"`
 }
 
-func GenerateFakeOrder() (*Order, error) {
+func GenerateFakeOrder(maxNumberOfItems int) (*Order, error) {
 	a := Order{}
 	err := faker.FakeData(&a)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(a.Items) > maxNumberOfItems {
+		a.Items = a.Items[:maxNumberOfItems]
 	}
 
 	return &a, nil
