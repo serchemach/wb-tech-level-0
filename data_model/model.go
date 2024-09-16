@@ -94,5 +94,11 @@ func GenerateFakeOrder(maxNumberOfItems int) (*Order, error) {
 		a.Items = a.Items[:maxNumberOfItems]
 	}
 
+	t, err := time.Parse("2006-01-02 15:04:05 -0700", "2021-10-07 12:44:22 +0530")
+	if err != nil {
+		return nil, err
+	}
+
+	a.DateCreated = Time(t)
 	return &a, nil
 }

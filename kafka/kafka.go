@@ -31,8 +31,6 @@ func CreateConn() (*kafka.Reader, error) {
 	kafkaTopic := getEnv("KAFKA_TOPIC", "wb-topic")
 	kafkaURL := getEnv("KAFKA_URL", "kafka:9092")
 
-	fmt.Println(kafkaURL)
-
 	return kafka.NewReader(kafka.ReaderConfig{
 		Topic:     kafkaTopic,
 		Partition: kafkaPartition,
