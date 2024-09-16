@@ -3,26 +3,28 @@ package datamodel
 import (
 	"fmt"
 	"time"
+
+	"github.com/go-faker/faker/v4"
 )
 
 type Delivery struct {
-	Name    string `json:"name"`
-	Phone   string `json:"phone"`
-	Zip     string `json:"zip"`
-	City    string `json:"city"`
-	Address string `json:"address"`
-	Region  string `json:"region"`
-	Email   string `json:"email"`
+	Name    string `json:"name" faker:"name"`
+	Phone   string `json:"phone" faker:"phone_number"`
+	Zip     string `json:"zip" faker:"word"`
+	City    string `json:"city" faker:"word"`
+	Address string `json:"address" faker:"real_address"`
+	Region  string `json:"region" faker:"word"`
+	Email   string `json:"email", faker:"email"`
 }
 
 type Payment struct {
-	Transaction  string `json:"transaction"`
-	RequestId    string `json:"request_id"`
-	Currency     string `json:"currency"`
-	Provider     string `json:"provider"`
+	Transaction  string `json:"transaction" faker:"uuid_hyphenated"`
+	RequestId    string `json:"request_id" faker:"uuid_hyphenated"`
+	Currency     string `json:"currency" faker:"word"`
+	Provider     string `json:"provider" faker:"word"`
 	Amount       int    `json:"amount"`
 	PaymentDt    int    `json:"payment_dt"`
-	Bank         string `json:"bank"`
+	Bank         string `json:"bank" faker:"word"`
 	DeliveryCost int    `json:"delivery_cost"`
 	GoodsTotal   int    `json:"goods_total"`
 	CustomFee    int    `json:"custom_fee"`
@@ -30,15 +32,15 @@ type Payment struct {
 
 type Item struct {
 	ChrtId      int    `json:"chrt_id"`
-	TrackNumber string `json:"track_number"`
+	TrackNumber string `json:"track_number" faker:"uuid_hyphenated"`
 	Price       int    `json:"price"`
 	Rid         string `json:"rid"`
-	Name        string `json:"name"`
+	Name        string `json:"name" faker:"word"`
 	Sale        int    `json:"sale"`
-	Size        string `json:"size"`
+	Size        string `json:"size" faker:"word"`
 	TotalPrice  int    `json:"total_price"`
 	NmId        int    `json:"nm_id"`
-	Brand       string `json:"brand"`
+	Brand       string `json:"brand" faker:"word"`
 	Status      int    `json:"status"`
 }
 
@@ -65,18 +67,28 @@ func (d Time) MarshalJSON() ([]byte, error) {
 }
 
 type Order struct {
-	OrderUid          string   `json:"order_uid"`
-	TrackNumber       string   `json:"track_number"`
+	OrderUid          string   `json:"order_uid" faker:"uuid_hyphenated"`
+	TrackNumber       string   `json:"track_number" faker:"uuid_hyphenated"`
 	Entry             string   `json:"entry"`
 	Delivery          Delivery `json:"delivery"`
 	Payment           Payment  `json:"payment"`
 	Items             []Item   `json:"items"`
 	Locale            string   `json:"locale"`
 	InternalSignature string   `json:"internal_signature"`
-	CustomerId        string   `json:"customer_id"`
-	DeliveryService   string   `json:"delivery_service"`
+	CustomerId        string   `json:"customer_id" faker:"uuid_hyphenated"`
+	DeliveryService   string   `json:"delivery_service" faker:"word"`
 	Shardkey          string   `json:"shardkey"`
 	SmId              int      `json:"sm_id"`
 	DateCreated       Time     `json:"date_created"`
 	OofShard          string   `json:"oof_shard"`
+}
+
+func GenerateFakeOrder() (*Order, error) {
+	a := Order{}
+	err := faker.FakeData(&a)
+	if err != nil {
+		return nil, err
+	}
+
+	return &a, nil
 }

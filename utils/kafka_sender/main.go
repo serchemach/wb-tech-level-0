@@ -11,7 +11,6 @@ import (
 
 	// "time"
 
-	"github.com/bxcodec/faker/v3"
 	"github.com/joho/godotenv"
 	"github.com/segmentio/kafka-go"
 	"github.com/serchemach/wb-tech-level-0/data_model"
@@ -43,8 +42,7 @@ func main() {
 	}
 	defer kc.Close()
 
-	testOrder := datamodel.Order{}
-	err = faker.FakeData(&testOrder)
+	testOrder, err := datamodel.GenerateFakeOrder()
 	if err != nil {
 		fmt.Println(err)
 	}
