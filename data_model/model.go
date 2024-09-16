@@ -1,11 +1,8 @@
-package nats_stuff
+package datamodel
 
 import (
 	"fmt"
-	"os"
 	"time"
-
-	"github.com/nats-io/stan.go"
 )
 
 type Delivery struct {
@@ -82,19 +79,4 @@ type Order struct {
 	SmId              int      `json:"sm_id"`
 	DateCreated       Time     `json:"date_created"`
 	OofShard          string   `json:"oof_shard"`
-}
-
-func getEnv(key, fallback string) string {
-	if value, ok := os.LookupEnv(key); ok {
-		return value
-	}
-	return fallback
-}
-
-func CreateConn() (stan.Conn, error) {
-	clusterId := getEnv("STAN_CLUSTER_ID", "test-cluster")
-	clientId := getEnv("STAN_CLIENT_ID", "wb-tech-level-0")
-	stanURL := getEnv("STAN_URL", "nats://localhost:4222")
-
-	return stan.Connect(clusterId, clientId, stan.NatsURL(stanURL))
 }

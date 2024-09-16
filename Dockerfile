@@ -12,7 +12,9 @@ RUN go mod download
 # Copy the source code. Note the slash at the end, as explained in
 # https://docs.docker.com/reference/dockerfile/#copy
 COPY *.go .env ./
-COPY nats_stuff/*.go nats_stuff/
+COPY db/*.go db/
+COPY kafka/*.go kafka/
+COPY data_model/*.go data_model/
 COPY pages/* pages/
 
 # Build

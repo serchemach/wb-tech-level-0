@@ -15,8 +15,11 @@ import (
 	// "github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	// "github.com/nats-io/stan.go"
-	"github.com/serchemach/wb-tech-level-0/nats_stuff"
+	"github.com/serchemach/wb-tech-level-0/db"
+	"github.com/serchemach/wb-tech-level-0/kafka"
 )
+
+const CACHE_SIZE int = 1024
 
 func main() {
 	err := godotenv.Load()
@@ -24,15 +27,16 @@ func main() {
 		log.Fatal(fmt.Sprintf("Error loading .env file: %s\n", err))
 	}
 
-	db, err := createDbConn()
+	dbConn, err := db.CreateDbConn()
 	if err != nil {
 		log.Fatal("Cannot create a connection to the database: ", err)
 	}
 
-	sc, err := nats_stuff.CreateConn()
+	kc, err := kafka.CreateConn()
 	if err != nil {
-		log.Fatal("Cannot create a connection to nats-streaming server: ", err)
+		log.Fatal("Cannot create a connection to kafka server: ", err)
 	}
+	defer kc.Close()
 
 	cache, err := ristretto.NewCache(&ristretto.Config{
 		NumCounters: int64(CACHE_SIZE) * 10,
@@ -43,7 +47,7 @@ func main() {
 		log.Fatal("Error while creating the cache: ", err)
 	}
 
-	err = initCache(cache, db)
+	err = db.InitCache(cache, dbConn, CACHE_SIZE)
 	if err != nil {
 		log.Fatal("Error while initialising the cache: ", err)
 	}
@@ -51,13 +55,8 @@ func main() {
 	fmt.Printf("Added %d orders to cache\n", cache.Metrics.CostAdded())
 	fmt.Printf("Cache max cost %d\n", cache.MaxCost())
 
-	sub, err := CreateSubscription(sc, db, cache)
-	if err != nil {
-		log.Fatal("Error while subscribing to the channel: ", err)
-	}
-	defer sub.Close()
-
-	fmt.Println("Successfully subscribed to the nats-streaming server")
+	go kafka.ReadTopicIndefinitely(kc, dbConn, cache)
+	fmt.Println("Successfully subscribed to the kafka topic")
 
 	http.HandleFunc("GET /order", func(w http.ResponseWriter, r *http.Request) {
 		orderUid := r.URL.Query().Get("order_uid")
@@ -67,7 +66,7 @@ func main() {
 			return
 		}
 
-		order, err := fetchOrderWithCache(orderUid, cache, db)
+		order, err := db.FetchOrderWithCache(orderUid, cache, dbConn)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(fmt.Sprintf("Error while fetching the order data: %s", err)))

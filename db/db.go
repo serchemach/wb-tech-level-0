@@ -1,4 +1,4 @@
-package main
+package db
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/serchemach/wb-tech-level-0/nats_stuff"
+	"github.com/serchemach/wb-tech-level-0/data_model"
 )
 
 type DeliveryDb struct {
@@ -79,7 +79,7 @@ func (m *NoPasswordError) Error() string {
 	return "There is no db user password specified in the environment variable"
 }
 
-func createDbConn() (*pgxpool.Pool, error) {
+func CreateDbConn() (*pgxpool.Pool, error) {
 	user := getEnv("POSTGRES_USER", "postgres-example-user")
 	var password string
 	if value, ok := os.LookupEnv("POSTGRES_PASSWORD"); !ok {
@@ -93,7 +93,7 @@ func createDbConn() (*pgxpool.Pool, error) {
 	return pgxpool.New(context.Background(), connString)
 }
 
-func insertOrder(order *nats_stuff.Order, conn *pgxpool.Pool) error {
+func InsertOrder(order *datamodel.Order, conn *pgxpool.Pool) error {
 	queryString := fmt.Sprintf("INSERT INTO order_scheme.delivery (name, phone, zip, city, address, region, email) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s') RETURNING id;", order.Delivery.Name, order.Delivery.Phone, order.Delivery.Zip, order.Delivery.City, order.Delivery.Address, order.Delivery.Region, order.Delivery.Email)
 	var deliveryId int
 	row := conn.QueryRow(context.Background(), queryString)
@@ -131,7 +131,7 @@ func insertOrder(order *nats_stuff.Order, conn *pgxpool.Pool) error {
 	return nil
 }
 
-func fetchOrder(orderUid string, conn *pgxpool.Pool) (*nats_stuff.Order, error) {
+func FetchOrder(orderUid string, conn *pgxpool.Pool) (*datamodel.Order, error) {
 	queryString := fmt.Sprintf("SELECT * FROM order_scheme.order WHERE order_uid = '%s'", orderUid)
 	rows, _ := conn.Query(context.Background(), queryString)
 	orderDb, err := pgx.CollectOneRow(rows, pgx.RowToStructByName[OrderDb])
@@ -160,7 +160,7 @@ func fetchOrder(orderUid string, conn *pgxpool.Pool) (*nats_stuff.Order, error) 
 		return nil, err
 	}
 
-	delivery := nats_stuff.Delivery{
+	delivery := datamodel.Delivery{
 		Name:    deliveryDb.Name,
 		Phone:   deliveryDb.Phone,
 		Zip:     deliveryDb.Zip,
@@ -170,7 +170,7 @@ func fetchOrder(orderUid string, conn *pgxpool.Pool) (*nats_stuff.Order, error) 
 		Email:   deliveryDb.Email,
 	}
 
-	payment := nats_stuff.Payment{
+	payment := datamodel.Payment{
 		Transaction:  paymentDb.Transaction,
 		RequestId:    paymentDb.RequestId,
 		Currency:     paymentDb.Currency,
@@ -183,9 +183,9 @@ func fetchOrder(orderUid string, conn *pgxpool.Pool) (*nats_stuff.Order, error) 
 		CustomFee:    paymentDb.CustomFee,
 	}
 
-	items := make([]nats_stuff.Item, len(itemsDb))
+	items := make([]datamodel.Item, len(itemsDb))
 	for i := 0; i < len(itemsDb); i++ {
-		items[i] = nats_stuff.Item{
+		items[i] = datamodel.Item{
 			ChrtId:      itemsDb[i].ChrtId,
 			TrackNumber: itemsDb[i].TrackNumber,
 			Price:       itemsDb[i].Price,
@@ -200,7 +200,7 @@ func fetchOrder(orderUid string, conn *pgxpool.Pool) (*nats_stuff.Order, error) 
 		}
 	}
 
-	return &nats_stuff.Order{
+	return &datamodel.Order{
 		OrderUid:          orderDb.OrderUid,
 		TrackNumber:       orderDb.TrackNumber,
 		Entry:             orderDb.Entry,
@@ -213,13 +213,13 @@ func fetchOrder(orderUid string, conn *pgxpool.Pool) (*nats_stuff.Order, error) 
 		DeliveryService:   orderDb.DeliveryService,
 		Shardkey:          orderDb.Shardkey,
 		SmId:              orderDb.SmId,
-		DateCreated:       nats_stuff.Time(orderDb.DateCreated),
+		DateCreated:       datamodel.Time(orderDb.DateCreated),
 		OofShard:          orderDb.OofShard,
 	}, nil
 }
 
-func initCache(cache *ristretto.Cache, conn *pgxpool.Pool) error {
-	queryString := fmt.Sprintf("SELECT order_uid FROM order_scheme.order ORDER BY date_created DESC LIMIT %d;", CACHE_SIZE)
+func InitCache(cache *ristretto.Cache, conn *pgxpool.Pool, cacheSize int) error {
+	queryString := fmt.Sprintf("SELECT order_uid FROM order_scheme.order ORDER BY date_created DESC LIMIT %d;", cacheSize)
 	rows, _ := conn.Query(context.Background(), queryString)
 	orderIds, err := pgx.CollectRows(rows, pgx.RowTo[string])
 	if err != nil {
@@ -227,7 +227,7 @@ func initCache(cache *ristretto.Cache, conn *pgxpool.Pool) error {
 	}
 
 	for _, orderId := range orderIds {
-		cur_order, err := fetchOrder(orderId, conn)
+		cur_order, err := FetchOrder(orderId, conn)
 		if err != nil {
 			return err
 		}
@@ -237,4 +237,28 @@ func initCache(cache *ristretto.Cache, conn *pgxpool.Pool) error {
 	}
 
 	return nil
+}
+
+func FetchOrderWithCache(orderUid string, cache *ristretto.Cache, dbConn *pgxpool.Pool) (*datamodel.Order, error) {
+	orderCache, ok := cache.Get(orderUid)
+	if ok {
+		fmt.Printf("Cache hit for %s\n", orderUid)
+		return orderCache.(*datamodel.Order), nil
+	}
+	fmt.Printf("Cache miss for %s\n", orderUid)
+
+	order, err := FetchOrder(orderUid, dbConn)
+	if err != nil {
+		return nil, err
+	}
+
+	cache.Set(orderUid, order, 1)
+	cache.Wait()
+	return order, nil
+}
+
+func InsertOrderWithCache(order *datamodel.Order, cache *ristretto.Cache, dbConn *pgxpool.Pool) error {
+	cache.Set(order.OrderUid, order, 1)
+	cache.Wait()
+	return InsertOrder(order, dbConn)
 }
