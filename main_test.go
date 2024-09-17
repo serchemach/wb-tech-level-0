@@ -91,7 +91,7 @@ func TestServer(t *testing.T) {
 	})
 
 	t.Run("Test empty order id retrieval", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "localhost:8080/order?order_uid=", nil)
+		req := httptest.NewRequest("GET", "localhost:8080/api/v1/order?order_uid=", nil)
 		w := httptest.NewRecorder()
 		OrderHandler(w, req, cache, dbConn)
 
@@ -100,7 +100,7 @@ func TestServer(t *testing.T) {
 	})
 
 	t.Run("Test wrong order id retrieval", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "localhost:8080/order?order_uid=1111", nil)
+		req := httptest.NewRequest("GET", "localhost:8080/api/v1/order?order_uid=1111", nil)
 		w := httptest.NewRecorder()
 		OrderHandler(w, req, cache, dbConn)
 
@@ -120,7 +120,7 @@ func TestServer(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	t.Run("Test correct order id retrieval", func(t *testing.T) {
-		req := httptest.NewRequest("GET", fmt.Sprintf("localhost:8080/order?order_uid=%s", testOrder.OrderUid), nil)
+		req := httptest.NewRequest("GET", fmt.Sprintf("localhost:8080/api/v1/order?order_uid=%s", testOrder.OrderUid), nil)
 		w := httptest.NewRecorder()
 		OrderHandler(w, req, cache, dbConn)
 

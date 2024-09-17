@@ -85,7 +85,7 @@ func main() {
 	go kafka.ReadTopicIndefinitely(kc, dbConn, cache)
 	fmt.Println("Successfully subscribed to the kafka topic")
 
-	http.HandleFunc("GET /order", func(w http.ResponseWriter, r *http.Request) { OrderHandler(w, r, cache, dbConn) })
+	http.HandleFunc("GET /api/v1/order", func(w http.ResponseWriter, r *http.Request) { OrderHandler(w, r, cache, dbConn) })
 	http.HandleFunc("GET /", InterfaceHandler)
 
 	log.Fatal(http.ListenAndServe(":8080", nil))

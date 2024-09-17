@@ -13,7 +13,7 @@
   const getOrder = () => {
     const order_uid = document.querySelector("#order_uid").value;
     let resultElement = document.querySelector("#result")
-    fetch(`/order?order_uid=${order_uid}`)
+    fetch(`/api/v1/order?order_uid=${order_uid}`)
       .then((res) => {
         if (res.status != 200) {
           res.text().then((val) => {
