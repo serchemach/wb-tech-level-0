@@ -34,5 +34,9 @@ func main() {
 
 	err = kafka.SendOrder(kafkaPartition, kafkaTopic, kafkaURL, order)
 
-	fmt.Println(err)
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		fmt.Printf("Sent an order with id=%s", order.OrderUid)
+	}
 }
