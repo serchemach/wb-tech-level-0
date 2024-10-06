@@ -1,6 +1,8 @@
 package datamodel
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -101,4 +103,16 @@ func GenerateFakeOrder(maxNumberOfItems int) (*Order, error) {
 
 	a.DateCreated = Time(t)
 	return &a, nil
+}
+
+func ParseOrder(m []byte) (*Order, error) {
+	var order Order
+	decoder := json.NewDecoder(bytes.NewReader(m))
+	decoder.DisallowUnknownFields()
+	err := decoder.Decode(&order)
+	if err != nil {
+		return nil, err
+	}
+
+	return &order, nil
 }

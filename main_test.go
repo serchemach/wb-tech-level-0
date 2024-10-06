@@ -3,27 +3,22 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http/httptest"
 	"os"
 	"strconv"
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/ristretto"
 	"github.com/joho/godotenv"
 	datamodel "github.com/serchemach/wb-tech-level-0/data_model"
-	"github.com/serchemach/wb-tech-level-0/db"
-	"github.com/serchemach/wb-tech-level-0/kafka"
+	"github.com/serchemach/wb-tech-level-0/infra/db"
+	"github.com/serchemach/wb-tech-level-0/infra/kafka"
+	ristrettocache "github.com/serchemach/wb-tech-level-0/service/caching"
+	httptransport "github.com/serchemach/wb-tech-level-0/transport"
 	"github.com/stretchr/testify/require"
 	tc "github.com/testcontainers/testcontainers-go/modules/compose"
 )
-
-func getEnv(key, fallback string) string {
-	if value, ok := os.LookupEnv(key); ok {
-		return value
-	}
-	return fallback
-}
 
 func TestServer(t *testing.T) {
 	// Load the env variables because Ryuk will break if you don't
@@ -49,24 +44,33 @@ func TestServer(t *testing.T) {
 	require.NoError(t, compose.WithOsEnv().Up(ctx, tc.Wait(true)), "Compose no work")
 
 	// Setup kafka and postgres connections along with cache
-	dbConn, err := db.CreateDbConn()
-	require.NoError(t, err, "Failed to connect to the database")
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	user := getEnv("POSTGRES_USER", "postgres-example-user")
+	var password string
+	password, ok := os.LookupEnv("POSTGRES_PASSWORD")
+	require.True(t, ok, "There is no db user password specified in the environment variable")
 
-	kc, err := kafka.CreateConn()
-	require.NoError(t, err, "Failed to connect to kafka")
-	defer kc.Close()
+	url := getEnv("POSTGRES_URL", "postgres:5432")
+	dbConnString := fmt.Sprintf("postgres://%s:%s@%s/wb_tech", user, password, url)
 
-	cache, err := ristretto.NewCache(&ristretto.Config{
-		NumCounters: int64(CACHE_SIZE) * 10,
-		MaxCost:     int64(CACHE_SIZE),
-		BufferItems: 64,
-	})
-	require.NoError(t, err, "Failed to create the cache")
+	dbConn, err := db.New(dbConnString, logger)
+	require.NoError(t, err, "Cannot create a connection to the database", "error", err)
 
-	err = db.InitCache(cache, dbConn, CACHE_SIZE)
-	require.NoError(t, err, "Failed to initialise cache")
+	cache, err := ristrettocache.New(logger, CACHE_SIZE, dbConn)
+	require.NoError(t, err, "Cannot create the cache", "error", err)
 
-	go kafka.ReadTopicIndefinitely(kc, dbConn, cache)
+	kafkaPartition := getEnv("KAFKA_PARTITION", "0")
+	kafkaTopic := getEnv("KAFKA_TOPIC", "wb-topic")
+	kafkaURL := getEnv("KAFKA_URL", "kafka:9092")
+
+	kc, err := kafka.New(kafkaPartition, kafkaTopic, kafkaURL, logger, cache)
+	require.NoError(t, err, "Cannot create a connection to kafka server: ", err)
+
+	ctxTest, cancelTest := context.WithCancel(context.Background())
+	kc.Listen(ctxTest)
+
+	transport := httptransport.New(cache, logger)
+	defer cancelTest()
 
 	formFile, err := os.ReadFile("pages/form.html")
 	require.NoError(t, err, "Failed to load the form file")
@@ -77,7 +81,7 @@ func TestServer(t *testing.T) {
 	t.Run("Test file retrieval", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "localhost:8080/", nil)
 		w := httptest.NewRecorder()
-		InterfaceHandler(w, req)
+		transport.InterfaceHandler(w, req)
 
 		response := w.Result()
 		require.Equal(t, 200, response.StatusCode)
@@ -93,7 +97,7 @@ func TestServer(t *testing.T) {
 	t.Run("Test empty order id retrieval", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "localhost:8080/api/v1/order?order_uid=", nil)
 		w := httptest.NewRecorder()
-		OrderHandler(w, req, cache, dbConn)
+		transport.OrderHandler(w, req)
 
 		response := w.Result()
 		require.NotEqual(t, 200, response.StatusCode)
@@ -102,7 +106,7 @@ func TestServer(t *testing.T) {
 	t.Run("Test wrong order id retrieval", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "localhost:8080/api/v1/order?order_uid=1111", nil)
 		w := httptest.NewRecorder()
-		OrderHandler(w, req, cache, dbConn)
+		transport.OrderHandler(w, req)
 
 		response := w.Result()
 		require.NotEqual(t, 200, response.StatusCode)
@@ -122,7 +126,7 @@ func TestServer(t *testing.T) {
 	t.Run("Test correct order id retrieval", func(t *testing.T) {
 		req := httptest.NewRequest("GET", fmt.Sprintf("localhost:8080/api/v1/order?order_uid=%s", testOrder.OrderUid), nil)
 		w := httptest.NewRecorder()
-		OrderHandler(w, req, cache, dbConn)
+		transport.OrderHandler(w, req)
 
 		response := w.Result()
 		require.Equal(t, 200, response.StatusCode)
@@ -131,7 +135,7 @@ func TestServer(t *testing.T) {
 		n, err := response.Body.Read(buffer)
 		require.NoError(t, err, "Failed to parse the file body")
 
-		order, err := kafka.ParseMessage(buffer[:n])
+		order, err := datamodel.ParseOrder(buffer[:n])
 		require.NoError(t, err, "Failed to parse the recieved order")
 		require.Equal(t, testOrder, order, "Order from the server is not equal to the one sent")
 	})

@@ -12,10 +12,11 @@ RUN go mod download
 # Copy the source code. Note the slash at the end, as explained in
 # https://docs.docker.com/reference/dockerfile/#copy
 COPY *.go .env ./
-COPY db/*.go db/
-COPY kafka/*.go kafka/
-COPY data_model/*.go data_model/
-COPY pages/* pages/
+COPY infra/ infra/
+COPY transport/ transport/
+COPY service/ service/
+COPY data_model/ data_model/
+COPY pages/ pages/
 
 # Build
 RUN CGO_ENABLED=0 GOOS=linux go build -o /wb-tech-level-0

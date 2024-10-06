@@ -1,92 +1,75 @@
 package main
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
+	"log/slog"
 	"os"
 
-	"log"
-	"net/http"
-
-	"github.com/dgraph-io/ristretto"
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"github.com/joho/godotenv"
-	"github.com/serchemach/wb-tech-level-0/db"
-	"github.com/serchemach/wb-tech-level-0/kafka"
+	"github.com/serchemach/wb-tech-level-0/infra/db"
+	"github.com/serchemach/wb-tech-level-0/infra/kafka"
+	ristrettocache "github.com/serchemach/wb-tech-level-0/service/caching"
+	httptransport "github.com/serchemach/wb-tech-level-0/transport"
 )
 
 const CACHE_SIZE int = 1024
 
-func OrderHandler(w http.ResponseWriter, r *http.Request, cache *ristretto.Cache, dbConn *pgxpool.Pool) {
-	orderUid := r.URL.Query().Get("order_uid")
-	if orderUid == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("No order id given"))
-		return
+func getEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
 	}
-
-	order, err := db.FetchOrderWithCache(orderUid, cache, dbConn)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(fmt.Sprintf("Error while fetching the order data: %s", err)))
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(order)
-	fmt.Printf("Error while encoding the json: %s\n", err)
-}
-
-func InterfaceHandler(w http.ResponseWriter, r *http.Request) {
-	htmlFile, err := os.ReadFile("pages/form.html")
-	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		fmt.Println(err)
-	}
-
-	w.Write(htmlFile)
+	return fallback
 }
 
 func main() {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal(fmt.Sprintf("Error loading .env file: %s\n", err))
+		logger.Error("Error loading .env file", "error", err)
+		os.Exit(1)
 	}
 
-	dbConn, err := db.CreateDbConn()
+	user := getEnv("POSTGRES_USER", "postgres-example-user")
+	var password string
+	if value, ok := os.LookupEnv("POSTGRES_PASSWORD"); !ok {
+		logger.Error("There is no db user password specified in the environment variable")
+		os.Exit(1)
+	} else {
+		password = value
+	}
+
+	url := getEnv("POSTGRES_URL", "postgres:5432")
+	dbConnString := fmt.Sprintf("postgres://%s:%s@%s/wb_tech", user, password, url)
+
+	dbConn, err := db.New(dbConnString, logger)
 	if err != nil {
-		log.Fatal("Cannot create a connection to the database: ", err)
+		logger.Error("Cannot create a connection to the database", "error", err)
+		os.Exit(1)
 	}
 
-	kc, err := kafka.CreateConn()
+	cache, err := ristrettocache.New(logger, CACHE_SIZE, dbConn)
 	if err != nil {
-		log.Fatal("Cannot create a connection to kafka server: ", err)
+		logger.Error("Cannot create the cache", "error", err)
+		os.Exit(1)
 	}
-	defer kc.Close()
 
-	cache, err := ristretto.NewCache(&ristretto.Config{
-		NumCounters: int64(CACHE_SIZE) * 10,
-		MaxCost:     int64(CACHE_SIZE),
-		BufferItems: 64,
-	})
+	kafkaPartition := getEnv("KAFKA_PARTITION", "0")
+	kafkaTopic := getEnv("KAFKA_TOPIC", "wb-topic")
+	kafkaURL := getEnv("KAFKA_URL", "kafka:9092")
+
+	kc, err := kafka.New(kafkaPartition, kafkaTopic, kafkaURL, logger, cache)
 	if err != nil {
-		log.Fatal("Error while creating the cache: ", err)
+		logger.Error("Cannot create a connection to kafka server", "error", err)
+		os.Exit(1)
 	}
 
-	err = db.InitCache(cache, dbConn, CACHE_SIZE)
-	if err != nil {
-		log.Fatal("Error while initialising the cache: ", err)
-	}
+	ctx, cancel := context.WithCancel(context.Background())
+	kc.Listen(ctx)
+	logger.Info("Successfully subscribed to the kafka topic")
 
-	fmt.Printf("Added %d orders to cache\n", cache.Metrics.CostAdded())
-	fmt.Printf("Cache max cost %d\n", cache.MaxCost())
-
-	go kafka.ReadTopicIndefinitely(kc, dbConn, cache)
-	fmt.Println("Successfully subscribed to the kafka topic")
-
-	http.HandleFunc("GET /api/v1/order", func(w http.ResponseWriter, r *http.Request) { OrderHandler(w, r, cache, dbConn) })
-	http.HandleFunc("GET /", InterfaceHandler)
-
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	transport := httptransport.New(cache, logger)
+	logger.Error("Error while listening", "error", transport.Listen(":8080"))
+	cancel()
 }

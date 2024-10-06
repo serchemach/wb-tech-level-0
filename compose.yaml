@@ -29,7 +29,7 @@ services:
     hostname: kafka
     image: bitnami/kafka:latest
     volumes:
-      - "./kafka/run-init-kafka-topics.sh:/docker-entrypoint-initdb.d/run-init-kafka-topics.sh:ro"
+      - "./infra/kafka/run-init-kafka-topics.sh:/docker-entrypoint-initdb.d/run-init-kafka-topics.sh:ro"
     healthcheck:
       test: ["CMD-SHELL", "echo 'test-message' | kafka-console-producer.sh --broker-list kafka:9092 --topic health-check-topic && kafka-console-consumer.sh --bootstrap-server kafka:9092 --topic health-check-topic --from-beginning --max-messages 1 | grep 'test-message'"]
       interval: 15s
