@@ -1,9 +1,11 @@
 package httptransport
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 
@@ -16,7 +18,7 @@ type Store interface {
 }
 
 type HTTPTransport interface {
-	Listen(string) error
+	Listen(context.Context, string)
 	OrderHandler(w http.ResponseWriter, r *http.Request)
 	InterfaceHandler(w http.ResponseWriter, r *http.Request)
 }
@@ -58,12 +60,26 @@ func (t *httpTransport) InterfaceHandler(w http.ResponseWriter, r *http.Request)
 	w.Write(htmlFile)
 }
 
-func (t *httpTransport) Listen(url string) error {
+func (t *httpTransport) Listen(ctx context.Context, url string) {
 	router := http.NewServeMux()
 	router.HandleFunc("GET /api/v1/order", t.OrderHandler)
 	router.HandleFunc("GET /", t.InterfaceHandler)
 
-	return http.ListenAndServe(url, router)
+	srv := &http.Server{
+		BaseContext: func(net.Listener) context.Context { return ctx },
+		Handler:     router,
+		Addr:        url,
+	}
+	srv.ListenAndServe()
+
+	go func() {
+		err := srv.ListenAndServe()
+		if err != nil {
+			t.logger.Error("Error while serving with http transport", "error", err)
+			return
+		}
+		t.logger.Debug("Shut down the http server")
+	}()
 }
 
 func New(store Store, logger *slog.Logger) HTTPTransport {

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
+	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/serchemach/wb-tech-level-0/infra/db"
@@ -23,6 +25,8 @@ func getEnv(key, fallback string) string {
 }
 
 func main() {
+	ctx, _ := signal.NotifyContext(context.Background(), os.Kill, os.Interrupt)
+
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
 	err := godotenv.Load()
@@ -65,11 +69,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
 	kc.Listen(ctx)
 	logger.Info("Successfully subscribed to the kafka topic")
 
 	transport := httptransport.New(cache, logger)
-	logger.Error("Error while listening", "error", transport.Listen(":8080"))
-	cancel()
+	transport.Listen(ctx, ":8080")
+
+	<-ctx.Done()
+	// Wait until goroutines recieve the signal
+	time.Sleep(time.Second)
+	logger.Debug("Gracefully shut down")
 }
