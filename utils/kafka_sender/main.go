@@ -8,7 +8,7 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/serchemach/wb-tech-level-0/data_model"
-	"github.com/serchemach/wb-tech-level-0/kafka"
+	"github.com/serchemach/wb-tech-level-0/infra/kafka"
 )
 
 func getEnv(key, fallback string) string {
